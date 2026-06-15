@@ -677,12 +677,11 @@ class WanT2VCrossAttention(WanSelfAttention):
             #EchoShot rope
             if inner_t is not None and cross_freqs is not None:
                 q = rope_apply_z(q, grid_sizes, cross_freqs, inner_t).to(q)
-                k = rope_apply_c(k, cross_freqs, inner_c).to(q)
-
+                k = rope_apply_c(k, cross_freqs, inner_c).to(k)
+            q_ip = q  # capture before graph break
             x = attention(q, k, v, attention_mode=self.attention_mode, heads=self.num_heads).flatten(2)
-
         if lynx_x_ip is not None and self.ip_adapter is not None and ip_scale !=0:
-            lynx_x_ip = self.ip_adapter(self, q, lynx_x_ip)
+            lynx_x_ip = self.ip_adapter(self, q_ip, lynx_x_ip)
             x = x.add(lynx_x_ip, alpha=lynx_ip_scale)
 
         # FantasyTalking audio attention
