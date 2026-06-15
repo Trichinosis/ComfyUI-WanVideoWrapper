@@ -661,6 +661,7 @@ class WanT2VCrossAttention(WanSelfAttention):
         else:
             q = self.norm_q(self.q(x).to(self.norm_q.weight.dtype),num_chunks=2 if rope_func == "comfy_chunked" else 1).to(x.dtype).view(b, -1, n, d)
 
+        q_ip = q  # capture before nag branch deletes q
         if nag_context is not None:
             x_positive, x_negative = self.nag_attention(b, n, d, q, context, nag_context)
             del q
@@ -671,19 +672,16 @@ class WanT2VCrossAttention(WanSelfAttention):
                 k = self.norm_k(self.k(context).to(self.norm_k.weight.dtype).view(b, -1, n, d)).to(x.dtype)
             else:
                 k = self.norm_k(self.k(context).to(self.norm_k.weight.dtype)).to(x.dtype).view(b, -1, n, d)
-
             v = self.v(context).view(b, -1, n, d)
-
             #EchoShot rope
             if inner_t is not None and cross_freqs is not None:
                 q = rope_apply_z(q, grid_sizes, cross_freqs, inner_t).to(q)
                 k = rope_apply_c(k, cross_freqs, inner_c).to(k)
-            q_ip = q  # capture before graph break
+            q_ip = q  # update after EchoShot rope may have modified q
             x = attention(q, k, v, attention_mode=self.attention_mode, heads=self.num_heads).flatten(2)
         if lynx_x_ip is not None and self.ip_adapter is not None and ip_scale !=0:
             lynx_x_ip = self.ip_adapter(self, q_ip, lynx_x_ip)
             x = x.add(lynx_x_ip, alpha=lynx_ip_scale)
-
         # FantasyTalking audio attention
         if audio_proj is not None:
             if len(audio_proj.shape) == 4:
